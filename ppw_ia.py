@@ -4,10 +4,11 @@ from nltk.corpus import stopwords
 from datetime import datetime
 import pytz
 import re
-import difflib
 import googleapiclient.discovery
 import webbrowser
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.svm import SVC
+from sklearn.pipeline import make_pipeline
 
 YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
 
@@ -25,16 +26,40 @@ stop_words = set(stopwords.words('portuguese'))
 
 qa_pairs = {
     "Quem é PPW_IA?": "Eu sou a PPW.IA, uma I.A. com o intuito de sanar possíveis dúvidas.",
-    # Adicione mais pares de pergunta-resposta conforme necessário
+    "voce é mulher": "Eu sou uma I.A, portanto não tenho gênero.",
+"Qual é o elemento químico mais abundante na crosta terrestre?": "Oxigênio é o elemento mais abundante na crosta.",
+"Qual é o símbolo químico do ouro?": "Au é o símbolo químico do valioso ouro.",
+"Quem é a autora de 'Orgulho e Preconceito'?": "Jane Austen é a autora de 'Orgulho e Preconceito'.",
+"Qual é a moeda oficial do Japão?": "A moeda oficial do Japão é o iene japonês.",
+"Qual é o maior oceano do mundo?": "Oceano Pacífico é o maior oceano do planeta.",
+"Quem é o autor de 'O Grande Gatsby'?": "F. Scott Fitzgerald é o autor de 'O Grande Gatsby'.",
+"Qual é o país mais populoso do mundo?": "A China é o país mais populoso do globo.",
+"Qual é o processo pelo qual as plantas produzem seu próprio alimento?": "A fotossíntese permite que as plantas façam isso.",
+"Quem foi o primeiro homem a pisar na Lua?": "Neil Armstrong foi o primeiro na superfície lunar.",
+"Qual é o rio mais longo do mundo?": "O Rio Amazonas detém o título de mais longo.",
+"Quem é o autor de 'A Origem das Espécies'?": "Charles Darwin é o autor de 'A Origem das Espécies'.",
+"Qual é o maior deserto do mundo?": "O Deserto do Saara é o maior deserto global.",
+"Qual é a montanha mais alta do mundo?": "O Monte Everest é a montanha mais alta do planeta.",
+"Quem é conhecido como o 'pai da informática'?": "Alan Turing é conhecido como o 'pai da informática'.",
+"Qual é a fórmula química da água?": "H2O é a fórmula química da água.",
+"Qual é a maior ilha do mundo?": "A Groenlândia é a maior ilha do mundo.",
+"Quem escreveu 'A Metamorfose'?": "Franz Kafka é o autor de 'A Metamorfose'.",
+"Qual é a cidade mais populosa do Brasil?": "São Paulo é a cidade mais populosa do Brasil.",
+"Em que ano a Segunda Guerra Mundial terminou?": "A Segunda Guerra Mundial terminou em 1945.",
+"Qual é a capital da Austrália?": "Camberra é a capital da Austrália.",
+     "Qual país venceu a Copa do Mundo de 1986?": "A Argentina venceu a Copa do Mundo de 1986.",
+"Qual país venceu a Copa do Mundo de 1990?": "A Alemanha venceu a Copa do Mundo de 1990.",
 }
 
 synonyms = {
     "voce": ["tu", "vc", "sua"],
 }
 
-# Modelo GPT-2 pré-treinado
-gpt_model = GPT2LMHeadModel.from_pretrained("gpt2")
-gpt_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+# Criação do modelo de aprendizado de máquina
+model = make_pipeline(TfidfVectorizer(), SVC(kernel='linear', probability=True))
+questions = list(qa_pairs.keys())
+answers = list(qa_pairs.values())
+model.fit(questions, answers)
 
 def normalize_text(text):
     text = unidecode.unidecode(text)
@@ -61,16 +86,35 @@ def search_youtube(query):
     else:
         return "Desculpe, não encontrei nenhum vídeo correspondente."
 
-def generate_gpt_response(prompt, max_length=50):
-    input_ids = gpt_tokenizer.encode(prompt, return_tensors="pt")
-    output_ids = gpt_model.generate(input_ids, max_length=max_length, num_return_sequences=1, no_repeat_ngram_size=2)
-    response = gpt_tokenizer.decode(output_ids[0], skip_special_tokens=True)
-    return response
+def get_current_time():
+    now = datetime.now(brasil_timezone)
+    formatted_time = now.strftime("%A %d/%m/%Y %H:%M")
+    return formatted_time
+
+def get_creation_date():
+    creation_date = datetime(2023, 9, 11, tzinfo=brasil_timezone)
+    today = datetime.now(brasil_timezone)
+    age = today - creation_date
+    return "Fui criado em 11/09/2023 pelo [DEV] MURILOPPW o que me faz ter " + str(age.days) + " dias."
+
+def get_release_date():
+    return "Data de lançamento: 11/09/2023"
+
+def get_current_day():
+    now = datetime.now(brasil_timezone)
+    day_of_week = now.strftime("%A")
+    return "Hoje é " + day_of_week
+
+def search_response_in_qa_pairs(normalized_question):
+    for q, a in qa_pairs.items():
+        if normalize_text(q) in normalized_question:
+            return a
+    return None
 
 def get_response(question):
     normalized_question = normalize_text(question)
 
-    response_from_qa_pairs = qa_pairs.get(normalized_question)
+    response_from_qa_pairs = search_response_in_qa_pairs(normalized_question)
     if response_from_qa_pairs:
         return response_from_qa_pairs
 
@@ -88,23 +132,22 @@ def get_response(question):
         words[i] = synonym
     normalized_question = ' '.join(words)
 
-    best_match = max(qa_pairs.keys(), key=lambda q: difflib.SequenceMatcher(None, normalized_question, normalize_text(q)).ratio())
-    similarity_score = difflib.SequenceMatcher(None, normalized_question, normalize_text(best_match)).ratio()
-    similarity_threshold = 0.71
-    if similarity_score >= similarity_threshold:
-        return qa_pairs[best_match]
+    preprocessed_question = preprocess_text(normalized_question)
+    preprocessed_question = ' '.join(preprocessed_question)
 
-    ml_response = generate_gpt_response(normalized_question, max_length=100)
-    return ml_response
+    response = model.predict([normalized_question])[0]
+    confidence = model.decision_function([normalized_question])[0]
 
+    if confidence > 0.7:
+        return response
+    else:
+        return "Desculpe, não entendi a pergunta."
+
+# Execução do chatbot
 while True:
     user_input = input("Usuário: ")
     if user_input.lower() == 'sair':
         break
-
     response = get_response(user_input)
 
-    if response == "Desculpe, não entendi a pergunta.":
-        response = "Desculpe, não entendi a pergunta."
-
-    print("PPW.IA:", response)
+    print("PPW.IA v1.0:", response)
