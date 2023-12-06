@@ -7,30 +7,16 @@ import re
 import difflib
 import googleapiclient.discovery
 import webbrowser
-
-# Configure a chave da API do YouTube
 YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
-
-# Verifique se o módulo 'unidecode' está instalado e, se não, instale-o
 try:
     import unidecode
 except ModuleNotFoundError:
     import unidecode
-
-# Baixe as stopwords do NLTK
 nltk.download('stopwords')
 nltk.download('punkt')
-
-# Defina o fuso horário para o Brasil
 brasil_timezone = pytz.timezone('America/Sao_Paulo')
-
-# Defina o idioma para o Brasil
 brasil_locale = 'pt_BR'
-
-# Defina as stopwords em português do NLTK
 stop_words = set(stopwords.words('portuguese'))
-
-# Pares de perguntas e funções associadas
 qa_pairs = {
     "qual horario": "get_current_time",
     "hours": "get_current_time",
@@ -1751,8 +1737,6 @@ qa_pairs = {
     "Padrões de design em programação?": "Padrões de design são soluções comprovadas para problemas comuns de design de software. Eles promovem a reutilização de código e melhoram a estrutura e a manutenibilidade do software."
   
 }
-
-# Crie um dicionário de sinônimos
 synonyms = {
     "voce": ["tu", "vc","sua"],
   "favorita": ["preferida", "gosta","sua"],
@@ -1790,34 +1774,22 @@ synonyms = {
     "gostar": ["apreciar", "curtir"],
     "cidade": ["metrópole", "município"],  
 }
-
-# Função para normalizar texto (remove acentos e converte para minúsculas)
 def normalize_text(text):
-    text = unidecode.unidecode(text)  # Remove acentos
+    text = unidecode.unidecode(text)
     return text.lower()
-
-# Função para encontrar sinônimos de uma palavra
 def find_synonyms(word):
     for key, value in synonyms.items():
         if word in value:
             return key
     return word
-
-# Função para preprocessar o texto
+    
 def preprocess_text(text):
-    # Tokenize o texto
     tokens = word_tokenize(text)
-    # Remova as stopwords
     filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
-    # Retorne o texto pré-processado como uma lista de palavras
     return filtered_tokens
-
-# Crie uma função para pesquisar vídeos no YouTube
 def search_youtube(query):
     youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
     search_response = youtube.search().list(q=query, type="video", part="id", maxResults=1).execute()
-
-    # Verifique se há resultados de pesquisa
     if "items" in search_response:
         video_id = search_response["items"][0]["id"]["videoId"]
         video_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -1825,69 +1797,46 @@ def search_youtube(query):
     else:
         return "Desculpe, não encontrei nenhum vídeo correspondente."
 
-# Função para obter a hora e data atual no formato especificado
 def get_current_time():
     now = datetime.now(brasil_timezone)
     formatted_time = now.strftime("%A %d/%m/%Y %H:%M")
     return formatted_time
-
-# Função para obter a data de criação
 def get_creation_date():
     creation_date = datetime(2023, 9, 11, tzinfo=brasil_timezone)
     today = datetime.now(brasil_timezone)
     age = today - creation_date
     return "Fui criado em 11/09/2023 pelo [DEV] MURILOPPW o que me faz ter " + str(age.days) + " dias."
-
-# Função para obter a data de lançamento
 def get_release_date():
     return "Data de lançamento: 11/09/2023"
-
-# Função para obter o dia atual da semana
 def get_current_day():
     now = datetime.now(brasil_timezone)
     day_of_week = now.strftime("%A")
     return "Hoje é " + day_of_week
 
-# Função para calcular a similaridade entre duas strings usando a biblioteca difflib
 def calculate_similarity(question, reference):
     return difflib.SequenceMatcher(None, question, reference).ratio()
-
-# Função para calcular uma expressão matemática
 def calculate_math_expression(expression):
     try:
         result = eval(expression)
         return str(result)
     except Exception as e:
         return "Desculpe, não consegui calcular a expressão matemática."
-
-# Função para obter a resposta
 def get_response(question):
-    # Normaliza a pergunta do usuário
     normalized_question = normalize_text(question)
-
-    # Verifique se a pergunta é uma solicitação para encontrar uma música no YouTube
     if question.startswith("/musica"):
         query = question[len("/musica"):].strip()
         video_url = search_youtube(query)
         if video_url:
             print("Redirecionando para o vídeo no YouTube...")
-            webbrowser.open(video_url)  # Abre o navegador com o URL do vídeo
+            webbrowser.open(video_url)
             return "Aqui está o link para a música que você procurou: " + video_url
-
-    # Substitua palavras por sinônimos
     words = normalized_question.split()
     for i, word in enumerate(words):
         synonym = find_synonyms(word)
         words[i] = synonym
-
     normalized_question = ' '.join(words)
-
-    # Preprocess a pergunta
     preprocessed_question = preprocess_text(normalized_question)
-    # Converta a lista de palavras em uma string
     preprocessed_question = ' '.join(preprocessed_question)
-
-    # Verifique se a pergunta está presente nos pares de perguntas e respostas
     for q, a in qa_pairs.items():
         if normalize_text(q) in normalized_question:
             if a == "get_current_time":
@@ -1901,25 +1850,16 @@ def get_response(question):
             else:
                 return a
 
-    # Verifique a similaridade entre a pergunta do usuário e as perguntas no dicionário
     best_match = max(qa_pairs.keys(), key=lambda q: calculate_similarity(normalized_question, normalize_text(q)))
     similarity_score = calculate_similarity(normalized_question, normalize_text(best_match))
-
-    # Defina um limite de similaridade para considerar a correspondência válida
     similarity_threshold = 0.71
-
     if similarity_score >= similarity_threshold:
         return qa_pairs[best_match]
-
-    # Verifique se a pergunta é uma expressão matemática
     math_expression = re.search(r'(\d+(\.\d+)?)\s*([+\-*/])\s*(\d+(\.\d+)?)', preprocessed_question)
     if math_expression:
         expression = math_expression.group(0)
         return calculate_math_expression(expression)
-
     return "Desculpe, não entendi a pergunta."
-
-# Loop para testar o bot
 while True:
     user_input = input("Usuário: ")
     if user_input.lower() == 'sair':
