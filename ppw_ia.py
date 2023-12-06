@@ -15,7 +15,6 @@ YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
 try:
     import unidecode
 except ModuleNotFoundError:
-    !pip install unidecode
     import unidecode
 
 # Baixe as stopwords do NLTK
