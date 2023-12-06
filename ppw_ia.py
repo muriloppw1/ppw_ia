@@ -7,18 +7,27 @@ import re
 import difflib
 import googleapiclient.discovery
 import webbrowser
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.pipeline import make_pipeline
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+
 YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
+
 try:
     import unidecode
 except ModuleNotFoundError:
     import unidecode
+
 nltk.download('stopwords')
 nltk.download('punkt')
+
 brasil_timezone = pytz.timezone('America/Sao_Paulo')
 brasil_locale = 'pt_BR'
 stop_words = set(stopwords.words('portuguese'))
+
 qa_pairs = {
-    "qual horario": "get_current_time",
+"qual horario": "get_current_time",
     "hours": "get_current_time",
     "horari": "get_current_time",
     "qual hora": "get_current_time",
@@ -1758,10 +1767,11 @@ qa_pairs = {
     "Arquitetura de software?": "Arquitetura de software envolve o design de sistemas de software, incluindo componentes, estrutura e interações. Uma boa arquitetura é fundamental para a escalabilidade e a manutenibilidade de aplicativos.",
     "Escalabilidade em programação": "Escalabilidade refere-se à capacidade de um sistema de software lidar com um aumento de carga ou demanda sem perda de desempenho. Isso é essencial para aplicativos que esperam crescimento.",
     "Padrões de design em programação?": "Padrões de design são soluções comprovadas para problemas comuns de design de software. Eles promovem a reutilização de código e melhoram a estrutura e a manutenibilidade do software."
-  
+ 
 }
+
 synonyms = {
-    "voce": ["tu", "vc","sua"],
+  "voce": ["tu", "vc","sua"],
   "favorita": ["preferida", "gosta","sua"],
   "de": ["em", "na",],
    "obrigado": ["valeu", "vlw","é isso","agradeço","agradeco"],
@@ -1797,19 +1807,32 @@ synonyms = {
     "gostar": ["apreciar", "curtir"],
     "cidade": ["metrópole", "município"],  
 }
+
+# Criação do modelo de aprendizado de máquina
+model = make_pipeline(TfidfVectorizer(), MultinomialNB())
+questions = list(qa_pairs.keys())
+answers = list(qa_pairs.values())
+model.fit(questions, answers)
+
+# Modelo GPT-2 pré-treinado
+gpt_model = GPT2LMHeadModel.from_pretrained("gpt2")
+gpt_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+
 def normalize_text(text):
     text = unidecode.unidecode(text)
     return text.lower()
+
 def find_synonyms(word):
     for key, value in synonyms.items():
         if word in value:
             return key
     return word
-    
+
 def preprocess_text(text):
     tokens = word_tokenize(text)
     filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
     return filtered_tokens
+
 def search_youtube(query):
     youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
     search_response = youtube.search().list(q=query, type="video", part="id", maxResults=1).execute()
@@ -1820,32 +1843,58 @@ def search_youtube(query):
     else:
         return "Desculpe, não encontrei nenhum vídeo correspondente."
 
+def generate_gpt_response(prompt, max_length=50):
+    input_ids = gpt_tokenizer.encode(prompt, return_tensors="pt")
+    output_ids = gpt_model.generate(input_ids, max_length=max_length, num_return_sequences=1, no_repeat_ngram_size=2)
+    response = gpt_tokenizer.decode(output_ids[0], skip_special_tokens=True)
+    return response
+
 def get_current_time():
     now = datetime.now(brasil_timezone)
     formatted_time = now.strftime("%A %d/%m/%Y %H:%M")
     return formatted_time
+
 def get_creation_date():
     creation_date = datetime(2023, 9, 11, tzinfo=brasil_timezone)
     today = datetime.now(brasil_timezone)
     age = today - creation_date
     return "Fui criado em 11/09/2023 pelo [DEV] MURILOPPW o que me faz ter " + str(age.days) + " dias."
+
 def get_release_date():
     return "Data de lançamento: 11/09/2023"
+
 def get_current_day():
     now = datetime.now(brasil_timezone)
     day_of_week = now.strftime("%A")
     return "Hoje é " + day_of_week
 
+def search_response_in_qa_pairs(normalized_question):
+    for q, a in qa_pairs.items():
+        if normalize_text(q) in normalized_question:
+            return a
+    return None
+
 def calculate_similarity(question, reference):
     return difflib.SequenceMatcher(None, question, reference).ratio()
+
 def calculate_math_expression(expression):
     try:
         result = eval(expression)
         return str(result)
     except Exception as e:
         return "Desculpe, não consegui calcular a expressão matemática."
+
+def get_ml_response(question):
+    prediction = model.predict([question])
+    return prediction[0]
+
 def get_response(question):
     normalized_question = normalize_text(question)
+
+    response_from_qa_pairs = search_response_in_qa_pairs(normalized_question)
+    if response_from_qa_pairs:
+        return response_from_qa_pairs
+
     if question.startswith("/musica"):
         query = question[len("/musica"):].strip()
         video_url = search_youtube(query)
@@ -1853,43 +1902,44 @@ def get_response(question):
             print("Redirecionando para o vídeo no YouTube...")
             webbrowser.open(video_url)
             return "Aqui está o link para a música que você procurou: " + video_url
+
     words = normalized_question.split()
     for i, word in enumerate(words):
         synonym = find_synonyms(word)
         words[i] = synonym
     normalized_question = ' '.join(words)
+
     preprocessed_question = preprocess_text(normalized_question)
     preprocessed_question = ' '.join(preprocessed_question)
-    for q, a in qa_pairs.items():
-        if normalize_text(q) in normalized_question:
-            if a == "get_current_time":
-                return get_current_time()
-            elif a == "get_creation_date":
-                return get_creation_date()
-            elif a == "get_release_date":
-                return get_release_date()
-            elif a == "get_current_day":
-                return get_current_day()
-            else:
-                return a
 
     best_match = max(qa_pairs.keys(), key=lambda q: calculate_similarity(normalized_question, normalize_text(q)))
     similarity_score = calculate_similarity(normalized_question, normalize_text(best_match))
     similarity_threshold = 0.71
     if similarity_score >= similarity_threshold:
         return qa_pairs[best_match]
+
     math_expression = re.search(r'(\d+(\.\d+)?)\s*([+\-*/])\s*(\d+(\.\d+)?)', preprocessed_question)
     if math_expression:
         expression = math_expression.group(0)
         return calculate_math_expression(expression)
-    return "Desculpe, não entendi a pergunta."
+
+    ml_response = get_ml_response(normalized_question)
+    return ml_response
+
 while True:
     user_input = input("Usuário: ")
     if user_input.lower() == 'sair':
         break
-    response = get_response(user_input)
 
-    if response == "Desculpe, não entendi a pergunta.":
-        response = "Não foi possível enviar o horário."
+    # Primeiro, tenta obter uma resposta do modelo GPT-2
+    gpt_response = generate_gpt_response(user_input, max_length=100)
+    if gpt_response:
+        print("PPW.IA (GPT-2):", gpt_response)
+    else:
+        # Se o GPT-2 não forneceu uma resposta, usa o modelo de aprendizado de máquina tradicional
+        response = get_response(user_input)
 
-    print("PPW.IA v1.0:", response)
+        if response == "Desculpe, não entendi a pergunta.":
+            response = "Desculpe, não entendi a pergunta."
+
+        print("PPW.IA v1.0:", response)
