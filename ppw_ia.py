@@ -86,7 +86,7 @@ qa_pairs = {
     "quando você atualizou?" : "Estou em constante evolução e atualização, porém minha versão atual é a v1.0." ,
     "você é homem" : "Eu sou uma IA, portanto não tenho gênero." ,
     "voce é mulher" : "Eu sou uma IA, portanto não tenho gênero." ,
-     "indique um livro" : "Uma boa escolha de livro pode ser "O Código Da Vinci" escrito por Dan Brown." ,
+     "indique um livro" : "Uma boa escolha de livro pode ser O Código Da Vinci escrito por Dan Brown." ,
       "quem foi Dan Brown. " : "Dan Brown é um autor norte-americano conhecido por seus romances de suspense e mistério, muitos dos quais incorporam elementos de história da arte, simbologia e conspirações. Ele nasceu em 22 de junho de 1964, em Exeter, New Hampshire, EUA." ,
     "O que é IA?" : "A inteligência artificial (IA) refere-se a sistemas de computador projetados para realizar tarefas que normalmente desativam a inteligência humana, como aprendizado, raciocínio, resolução de problemas e compreensão de linguagem natural." ,
     "Como eu funciona?" : "A IA funciona usando algoritmos complexos e modelos matemáticos para analisar dados, identificar padrões e tomar decisões com base nessas informações." ,
