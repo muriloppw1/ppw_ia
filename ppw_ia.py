@@ -1,32 +1,51 @@
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-from datetime import datetime
-import pytz
-import re
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sympy import sympify
+from sklearn.pipeline import make_pipeline
 import difflib
 import googleapiclient.discovery
 import webbrowser
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.pipeline import make_pipeline
+from datetime import datetime
+import pytz
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+import unidecode
+import string
+import re
 
-YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
 
 try:
-    import unidecode
-except ModuleNotFoundError:
-    import unidecode
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
 
-nltk.download('stopwords')
-nltk.download('punkt')
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
+try:
+    nltk.data.find('corpora/words.zip')
+except LookupError:
+    nltk.download('words')
+
+try:
+    nltk.data.find('corpora/rslp')
+except LookupError:
+    nltk.download('rslp')
+
+from nltk.stem import RSLPStemmer
+
+# Configuração inicial
+YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
 brasil_timezone = pytz.timezone('America/Sao_Paulo')
-brasil_locale = 'pt_BR'
 stop_words = set(stopwords.words('portuguese'))
 
 qa_pairs = {
- "qual horário" : "get_current_time" ,
+"qual horário" : "get_current_time" ,
     "horas" : "get_current_time" ,
     "horari" : "get_current_time" ,
     "qual hora" : "get_current_time" ,
@@ -1767,7 +1786,6 @@ qa_pairs = {
     "Escalabilidade em programação" : "Escalabilidade refere-se à capacidade de um sistema de software lidar com um aumento de carga ou demanda sem perda de desempenho. Isso é essencial para aplicativos que esperam crescer." ,
     "Padrões de design em programação?" : "Padrões de design são soluções comprovadas para problemas comuns de design de software. Eles promovem a reutilização de código e melhoram a estrutura e a manutenibilidade do software.",
     "Quem é PPW_IA?" : "Eu sou a PPW.IA, uma IA com o intuito de sanar possíveis dúvidas." ,
-
 }
 
 synonyms = {
@@ -1811,11 +1829,16 @@ synonyms = {
     "cidade": ["metrópole", "município"],
 }
 
-# Criação do modelo de aprendizado de máquina
-model = make_pipeline(TfidfVectorizer(), MultinomialNB())
+# Carregamento do modelo Naive Bayes
+nb_model = make_pipeline(TfidfVectorizer(), MultinomialNB())
 questions = list(qa_pairs.keys())
 answers = list(qa_pairs.values())
-model.fit(questions, answers)
+nb_model.fit(questions, answers)
+
+# Carregamento do modelo Random Forest
+stemmer = RSLPStemmer()
+rf_model = make_pipeline(TfidfVectorizer(), RandomForestClassifier())
+rf_model.fit(questions, answers)
 
 def normalize_text(text):
     text = unidecode.unidecode(text)
@@ -1828,9 +1851,10 @@ def find_synonyms(word):
     return word
 
 def preprocess_text(text):
+    text = text.translate(str.maketrans('', '', string.punctuation))
     tokens = word_tokenize(text)
-    filtered_tokens = [word for word in tokens if word.lower() not in stop_words]
-    return filtered_tokens
+    stemmed_tokens = [stemmer.stem(word) for word in tokens if word.lower() not in stop_words]
+    return stemmed_tokens
 
 def search_youtube(query):
     youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
@@ -1842,9 +1866,29 @@ def search_youtube(query):
     else:
         return "Desculpe, não encontrei nenhum vídeo correspondente."
 
+import calendar
+
+# Dicionário de tradução dos dias da semana
+calendario = {
+    'Sunday': 'Domingo',
+    'Monday': 'Segunda-feira',
+    'Tuesday': 'Terça-feira',
+    'Wednesday': 'Quarta-feira',
+    'Thursday': 'Quinta-feira',
+    'Friday': 'Sexta-feira',
+    'Saturday': 'Sábado'
+}
+
 def get_current_time():
     now = datetime.now(brasil_timezone)
-    formatted_time = now.strftime("%A %d/%m/%Y %H:%M")
+    
+    # Obter o nome do dia da semana em inglês
+    day_of_week_english = calendar.day_name[now.weekday()]
+    
+    # Traduzir para o português usando o dicionário
+    day_of_week_portuguese = calendario.get(day_of_week_english, day_of_week_english)
+    
+    formatted_time = now.strftime(f"{day_of_week_portuguese} %d/%m/%Y %H:%M")
     return formatted_time
 
 def get_creation_date():
@@ -1864,19 +1908,36 @@ def get_current_day():
 def calculate_similarity(question, reference):
     return difflib.SequenceMatcher(None, question, reference).ratio()
 
-def calculate_math_expression(expression):
-    try:
-        result = eval(expression)
-        return str(result)
-    except Exception as e:
-        return "Desculpe, não consegui calcular a expressão matemática."
-
 def get_ml_response(question):
-    prediction = model.predict([question])
-    return prediction[0]
+    nb_prediction = nb_model.predict([question])[0]
+    rf_prediction = rf_model.predict([question])[0]
+
+    # Retornar a predição do modelo com maior confiança (maior probabilidade)
+    if max(nb_model.predict_proba([question])[0]) > max(rf_model.predict_proba([question])[0]):
+        return nb_prediction
+    else:
+        return rf_prediction
+
+def calculate_math(expression):
+    try:
+        # Use a função sympify para avaliar a expressão corretamente
+        result = sympify(expression)
+
+        # Formate a resposta sem o .0, se for um número inteiro
+        formatted_result = int(result) if result.is_integer else result
+        return f"A resposta é {formatted_result}"
+    except Exception as e:
+        return f"Ocorreu um erro ao calcular a expressão: {str(e)}"
 
 def get_response(question):
     normalized_question = normalize_text(question)
+
+    # Verificar automaticamente se a entrada contém uma expressão matemática
+    match = re.match(r'(\d+)\s*([+\-*/])\s*(\d+)', normalized_question)
+    if match:
+        expression = normalized_question
+        return calculate_math(expression)
+
     if question.startswith("/musica"):
         query = question[len("/musica"):].strip()
         video_url = search_youtube(query)
@@ -1913,16 +1974,10 @@ def get_response(question):
     if similarity_score >= similarity_threshold:
         return qa_pairs[best_match]
 
-    math_expression = re.search(r'(\d+(\.\d+)?)\s*([+\-*/])\s*(\d+(\.\d+)?)', preprocessed_question)
-    if math_expression:
-        expression = math_expression.group(0)
-        return calculate_math_expression(expression)
-
     return "Desculpe, não entendi a pergunta."
 
     ml_response = get_ml_response(normalized_question)
     return ml_response
-
 
 # Execução do chatbot
 while True:
