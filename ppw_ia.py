@@ -36,10 +36,8 @@ try:
     nltk.data.find('corpora/rslp')
 except LookupError:
     nltk.download('rslp')
-
+    
 from nltk.stem import RSLPStemmer
-
-# Configuração inicial
 YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
 brasil_timezone = pytz.timezone('America/Sao_Paulo')
 stop_words = set(stopwords.words('portuguese'))
@@ -1829,21 +1827,16 @@ synonyms = {
     "cidade": ["metrópole", "município"],
 }
 
-# Carregamento do modelo Naive Bayes
 nb_model = make_pipeline(TfidfVectorizer(), MultinomialNB())
 questions = list(qa_pairs.keys())
 answers = list(qa_pairs.values())
 nb_model.fit(questions, answers)
-
-# Carregamento do modelo Random Forest
 stemmer = RSLPStemmer()
 rf_model = make_pipeline(TfidfVectorizer(), RandomForestClassifier())
 rf_model.fit(questions, answers)
-
 def normalize_text(text):
     text = unidecode.unidecode(text)
     return text.lower()
-
 def find_synonyms(word):
     for key, value in synonyms.items():
         if word in value:
@@ -1867,8 +1860,6 @@ def search_youtube(query):
         return "Desculpe, não encontrei nenhum vídeo correspondente."
 
 import calendar
-
-# Dicionário de tradução dos dias da semana
 calendario = {
     'Sunday': 'Domingo',
     'Monday': 'Segunda-feira',
@@ -1881,16 +1872,11 @@ calendario = {
 
 def get_current_time():
     now = datetime.now(brasil_timezone)
-    
-    # Obter o nome do dia da semana em inglês
     day_of_week_english = calendar.day_name[now.weekday()]
-    
-    # Traduzir para o português usando o dicionário
     day_of_week_portuguese = calendario.get(day_of_week_english, day_of_week_english)
-    
     formatted_time = now.strftime(f"{day_of_week_portuguese} %d/%m/%Y %H:%M")
     return formatted_time
-
+    
 def get_creation_date():
     creation_date = datetime(2023, 9, 11, tzinfo=brasil_timezone)
     today = datetime.now(brasil_timezone)
@@ -1911,19 +1897,14 @@ def calculate_similarity(question, reference):
 def get_ml_response(question):
     nb_prediction = nb_model.predict([question])[0]
     rf_prediction = rf_model.predict([question])[0]
-
-    # Retornar a predição do modelo com maior confiança (maior probabilidade)
     if max(nb_model.predict_proba([question])[0]) > max(rf_model.predict_proba([question])[0]):
         return nb_prediction
     else:
         return rf_prediction
-
+        
 def calculate_math(expression):
     try:
-        # Use a função sympify para avaliar a expressão corretamente
         result = sympify(expression)
-
-        # Formate a resposta sem o .0, se for um número inteiro
         formatted_result = int(result) if result.is_integer else result
         return f"A resposta é {formatted_result}"
     except Exception as e:
@@ -1931,8 +1912,6 @@ def calculate_math(expression):
 
 def get_response(question):
     normalized_question = normalize_text(question)
-
-    # Verificar automaticamente se a entrada contém uma expressão matemática
     match = re.match(r'(\d+)\s*([+\-*/])\s*(\d+)', normalized_question)
     if match:
         expression = normalized_question
@@ -1979,7 +1958,6 @@ def get_response(question):
     ml_response = get_ml_response(normalized_question)
     return ml_response
 
-# Execução do chatbot
 while True:
     user_input = input("Usuário: ")
     if user_input.lower() == 'sair':
