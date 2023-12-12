@@ -3,20 +3,21 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sympy import sympify
 from sklearn.pipeline import make_pipeline
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
+from nltk.stem import RSLPStemmer
+from sympy import sympify
 import difflib
 import googleapiclient.discovery
 import webbrowser
 from datetime import datetime
 import pytz
-import nltk
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
 import unidecode
 import string
+import calendar
 import re
-
 
 try:
     nltk.data.find('tokenizers/punkt')
@@ -37,8 +38,6 @@ try:
     nltk.data.find('corpora/rslp')
 except LookupError:
     nltk.download('rslp')
-    
-from nltk.stem import RSLPStemmer
 YOUTUBE_API_KEY = "AIzaSyAJBcghaqNS1YpjGWUrHItwxEoFQChq630"
 brasil_timezone = pytz.timezone('America/Sao_Paulo')
 stop_words = set(stopwords.words('portuguese'))
@@ -73,8 +72,49 @@ qa_pairs = {
     "data de lançamento" : "get_release_date" ,
     "qual dia da semana é hoje" : "get_current_day" ,
     "qual dia estamos" : "get_current_day" ,
-       "o que você faz" : "Estou aqui para responder suas perguntas." ,
-   "voce tem filhos" : "Não. Sou uma IA não posso ter relações sexuais." ,
+    "qual horário" : "get_current_time" ,
+    "horas" : "get_current_time" ,
+    "horari" : "get_current_time" ,
+    "qual hora" : "get_current_time" ,
+    "que data é hoje" : "get_current_time" ,
+    "qual data hoje" : "get_current_time" ,
+     "qual data hoje" : "get_current_time" ,
+    "horas" : "get_current_time" ,
+    "que dia e hoje" : "get_current_time" ,
+    "qual data hoje" : "get_current_time" ,
+    "quantas horas" : "get_current_time" ,
+    "qual data hoje" : "get_current_time" ,
+    "qual a hora" : "get_current_time" ,
+    "qual o horário" : "get_current_time" ,
+    "qual a hora" : "get_current_time" ,
+    "horas" : "get_current_time" ,
+    "/dia" : "get_current_time" ,
+    "dia" : "get_current_time" ,
+    "dia" : "get_current_time" ,
+    "hora" : "get_current_time" ,
+    "que dia é hoje" : "get_current_time" ,
+    "quantas horas" : "get_current_time" ,
+    "me fale as horas" : "get_current_time" ,
+    "me fale o horário" : "get_current_time" ,
+    "me fale horas" : "get_current_time" ,
+    "me informe a hora" : "get_current_time" ,
+    "qual data foi criada" : "get_creation_date" ,
+    "quando você nasceu" : "get_creation_date" ,
+    "quantos anos você tem" : "get_creation_date" ,
+    "quando você possui" : "get_creation_date" ,
+    "quando você foi programado" : "get_creation_date" ,
+    "quando você foi criado" : "get_creation_date" ,
+    "qual seus dados de criação" : "get_creation_date" ,
+    "quando você nasceu" : "get_creation_date" ,
+    "qual sua data de nascimento" : "get_creation_date" ,
+    "data de lançamento" : "get_release_date" ,
+    "qual dia da semana é hoje" : "get_current_time" ,
+    "qual dia da semana é hoje" : "get_current_time" ,
+    "que dia e hoje" : "get_current_time" ,
+    "que dia é hoje" : "get_current_time" ,
+    "qual dia estamos" : "get_current_time" ,
+    "o que você faz" : "Estou aqui para responder suas perguntas." ,
+    "voce tem filhos" : "Não. Sou uma IA não posso ter relações sexuais." ,
     "oi" : "Olá Meu nome é PPW.ia e estou a sua disposição pra responder e tirar suas dúvidas!!!." ,
     "Como você está?" : "Estou bem, obrigado!" ,
     "me indique um filme" : "A Saga de filmes Velozes e Furiosos é uma boa escolha." ,
@@ -1796,50 +1836,80 @@ qa_pairs = {
     "Escalabilidade em programação" : "Escalabilidade refere-se à capacidade de um sistema de software lidar com um aumento de carga ou demanda sem perda de desempenho. Isso é essencial para aplicativos que esperam crescer." ,
     "Padrões de design em programação?" : "Padrões de design são soluções comprovadas para problemas comuns de design de software. Eles promovem a reutilização de código e melhoram a estrutura e a manutenibilidade do software.",
     "Quem é PPW_IA?" : "Eu sou a PPW.IA, uma IA com o intuito de sanar possíveis dúvidas." ,
-
 }
 
 synonyms = {
-   "voce": ["tu", "vc", "sua"],"voce": ["tu", "vc", "sua"],
-   "mulher": ["feminino", "feminina", "menina"],
-   "homem": ["masculino", "masculina", "menino"],
-   "voce": ["tu", "vc", "sua"],"voce": ["tu", "vc", "sua"],
-    "favorita": ["preferida", "gosta", "sua"],
-    "de": ["em", "na"],
-    "obrigado": ["valeu", "vlw", "é isso", "agradeço", "agradeco"],
-    "Inteligencia Artificial": ["I.A", "A.I", "IA", "INteligencia Artifi", "AI"],
-    "ideias": ["ideia", "sugestao", "sugira"],
-    "+": ["mais"],
-    "-": ["menos"],
-    "*": ["vezes", "multiplicado"],
-    "/": ["dividido",],
-    "é": ["foi"],
-    "nao": ["n"],
-     "recomende": ["indique"],
-    "criação": ["nascimento", "criacao"],
-    "tem": ["ter", "possuir", "possui", "há"],
-    "presidente": ["governou", "comandou"],
-    "sei la": ["sla"],
-    "sua": ["tua", "seu"],
-    "criador": ["dono", "programador", "desenvolvedor", "pai", "criou"],
-    "mitologia nordica": ["nordica", "nordico"],
-    "mitologia grega": ["grega", "grego"],
-    "tua": ["sua"],
-    "oi": ["ola", "salve", "visao", "opa"],
-    "tudo bem": ["dboa", "de boa", "tudo bom", "joia", "suave", "tranquilo", "td bem"],
-    "porque": ["pq"],
-    "quando": ["qnd", "quand"],
-    "meu deus": ["mds"],
-    "copa do mundo": ["copa"],
-    "certeza": ["ctz", "certz"],
-    "falou": ["flw", "falo"],
-    "de": ["sobre"],
-    "EUA": ["Estados Unidos"],
-    "Brasil": ["Brazil"],
-    "computador": ["máquina", "PC"],
-    "gostar": ["apreciar", "curtir"],
-    "cidade": ["metrópole", "município"],
-    "teste": ["testar"],
+    "voce": ["tu"],
+  "mulher": ["feminina"],
+  "mulhe": ["feminina"],
+  "menina": ["mulhe"],
+  "homem": ["masculino"],
+  "favorita": ["preferida"],
+  "preferi": ["gosta"],
+  "de": ["em"],
+  "na": ["de"],
+  "obrigado": ["vlw"],
+  "obrigado": ["é isso"],
+  "obrigado": ["agradeço"],
+  "obrigado": ["agradeco"],
+  "Inteligencia Artificial": ["I.A"],
+  "ideias": ["ideia"],
+  "ideias": ["sugestao"],
+  "ideias": ["sugira"],
+  "+": ["mais"],
+  "-": ["menos"],
+  "*": ["vezes"],
+  "/": ["dividido"],
+  "é": ["foi"],
+  "nao": ["n"],
+  "recomende": ["indique"],
+  "criação": ["nascimento"],
+  "criação": ["criacao"],
+  "tem": ["ter"],
+  "tem": ["possuir"],
+  "tem": ["possui"],
+  "tem": ["há"],
+  "presidente": ["governou"],
+  "governou": ["comandou"],
+  "sei la": ["sla"],
+  "sua": ["tua"],
+  "sua": ["seu"],
+  "criador": ["dono"],
+  "programou": ["criou"],
+  "programador": ["desenvolvedor"],
+  "desenvolveu": ["construiu"],
+  "mitologia nordica": ["nordica"],
+  "mitologia grega": ["grega"],
+  "tua": ["sua"],
+  "oi": ["ola"],
+  "opa": ["salve"],
+  "eae": ["visao"],
+  "dboa": ["tudo bem"],
+  "tudo bem": ["dboa"],
+  "tudo bem": ["de boa"],
+  "tudo bem": ["tudo bom"],
+  "tudo bem": ["joia"],
+  "tudo bem": ["suave"],
+  "tudo bem": ["tranquilo"],
+  "tudo bem": ["td bem"],
+  "porque": ["pq"],
+  "quando": ["qnd"],
+  "quando": ["quand"],
+  "meu deus": ["mds"],
+  "copa do mundo": ["copa"],
+  "certeza": ["ctz"],
+  "certeza": ["certz"],
+  "falou": ["flw"],
+  "falou": ["falo"],
+  "de": ["sobre"],
+  "EUA": ["Estados Unidos"],
+  "Brasil": ["Brazil"],
+  "computador": ["máquina"],
+  "computador": ["PC"],
+  "gostar": ["apreciar"],
+  "gostar": ["curtir"],
+  "cidade": ["metrópole"],
+  "cidade": ["município"]
 }
 
 nb_model = make_pipeline(TfidfVectorizer(), MultinomialNB())
@@ -1854,16 +1924,17 @@ def normalize_text(text):
     return text.lower()
 def find_synonyms(word):
     for key, value in synonyms.items():
-        if word in value:
-            return key
+        if word == key:
+            return value[0]
+        elif word in value:
+            return next((k for k, v in synonyms.items() if word in v), word)
     return word
-
 def preprocess_text(text):
     text = text.translate(str.maketrans('', '', string.punctuation))
     tokens = word_tokenize(text)
+    tokens = [find_synonyms(word) for word in tokens]
     stemmed_tokens = [stemmer.stem(word) for word in tokens if word.lower() not in stop_words]
     return stemmed_tokens
-
 def search_youtube(query):
     youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
     search_response = youtube.search().list(q=query, type="video", part="id", maxResults=1).execute()
@@ -1874,7 +1945,6 @@ def search_youtube(query):
     else:
         return "Desculpe, não encontrei nenhum vídeo correspondente."
 
-import calendar
 calendario = {
     'Sunday': 'Domingo',
     'Monday': 'Segunda-feira',
@@ -1891,32 +1961,26 @@ def get_current_time():
     day_of_week_portuguese = calendario.get(day_of_week_english, day_of_week_english)
     formatted_time = now.strftime(f"{day_of_week_portuguese} %d/%m/%Y %H:%M")
     return formatted_time
-    
 def get_creation_date():
     creation_date = datetime(2023, 9, 11, tzinfo=brasil_timezone)
     today = datetime.now(brasil_timezone)
     age = today - creation_date
     return "Fui criado em 11/09/2023 pelo [DEV] MURILOPPW o que me faz ter " + str(age.days) + " dias."
-
 def get_release_date():
     return "Data de lançamento: 11/09/2023"
-
 def get_current_day():
     now = datetime.now(brasil_timezone)
     day_of_week = now.strftime("%A")
     return "Hoje é " + day_of_week
-
 def calculate_similarity(question, reference):
     return difflib.SequenceMatcher(None, question, reference).ratio()
-
 def get_ml_response(question):
     nb_prediction = nb_model.predict([question])[0]
     rf_prediction = rf_model.predict([question])[0]
     if max(nb_model.predict_proba([question])[0]) > max(rf_model.predict_proba([question])[0]):
         return nb_prediction
     else:
-        return rf_prediction
-        
+        return rf_prediction     
 def calculate_math(expression):
     try:
         result = sympify(expression)
@@ -1924,10 +1988,8 @@ def calculate_math(expression):
         return f"A resposta é {formatted_result}"
     except Exception as e:
         return f"Ocorreu um erro ao calcular a expressão: {str(e)}"
-
 def get_response(question):
     normalized_question = normalize_text(question)
-
     match = re.search(r'\d+\s*[+\-*/]\s*\d+(\s*[+\-*/]\s*\d+)*', normalized_question)
     if match:
         expression = match.group(0)
